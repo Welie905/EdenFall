@@ -14,7 +14,7 @@
 - **3D 凍結機制（禁 Time.timeScale=0）**：停用 3D 玩家控制、敵人 AI、NavMeshAgent；Rigidbody 記錄原狀態後轉 `isKinematic`；停用探索鏡頭與其 `AudioListener`（全局維持單一 Listener）。`Time.timeScale = 0` 僅用於 ESC 暫停選單。
 
 ## 3. 遇敵資料傳遞（BattleContext）與戰後結算
-- **開戰型態**：1) 投擲命中敵：被命中該怪帶【先制暈眩】（同隊最多 3 隻）；2) 正面接觸：正常開戰；3) 被敵背刺：玩家帶【開場硬直】。
+- **開戰型態**：1) 投擲命中敵：被命中該怪帶【先制暈眩】（同隊最多 3 隻）；2) 正面接觸：正常開戰；3) 敵人先碰到玩家：玩家帶【開場硬直】。
 - **快照機制**：開戰瞬間建立 `PreBattleSnapshot`（僅存記憶體、不寫檔）：玩家座標、HP、物品欄、該組敵人狀態。
 - **戰場載入**：各區獨立 2D 場景（`Battle_Edge`、`Battle_Wild`、`Battle_Factory`，共用玩家與 UI Prefab），由 `BattleContext.SceneId` 決定。
 - **強制戰/Boss**：由 Trigger 或對話直接生成 `BattleContext`（不走碰撞），標記「不可撤退」。
@@ -32,8 +32,8 @@
   - `Space`：跳躍（短按小跳/長按大跳；可強制中斷普通格擋）。
   - `Shift`：無敵幀閃避（最高優先取消權；按住格擋時按 Shift 可立即取消並閃避）。
   - `Q`：使用物品欄補品回血（動作結束時結算，被取消則不消耗道具）。
-  - `LMB`：點按普通攻擊（空地通用）；長按 ≥ 0.25 秒蓄力重擊（空地通用、蓄力不可移動、被打中斷，蓄滿破甲並使非 Boss 敵暈眩）。
-  - `RMB`：按住普通格擋（減傷、不可移動）；受擊瞬間點按完美格擋（0 傷害、反彈投射物、敵硬直）。紅光警示攻擊不可格擋，必用 `Shift` 閃避。
+  - `LMB`：點按普通攻擊（地面與空中皆通用）；長按 ≥ 0.25 秒蓄力重擊（地面與空中皆通用、蓄力不可移動、被打中斷；蓄滿可永久破除護甲並使非 Boss 敵人暈眩，精英暈眩時間減半、Boss 免疫）。
+  - `RMB`：按住普通格擋（減傷、不可移動）；敵人出招瞬間（判定幀前 0.2 秒窗口內）點按為完美格擋（0 傷害、反彈投射物、敵硬直）。紅光警示攻擊不可格擋，必用 `Shift` 閃避。
   - `ESC`：開啟暫停選單。
 - **UI Map**：`ESC` 關閉暫停選單、UI 導航與滑鼠點擊。
 
@@ -66,9 +66,9 @@
 - **汽水工廠水機制**：場景配置可擊破水管/閥門，玩家普攻擊破潑水。僅汽水系與 Boss 受影響：進入【淋濕】狀態（持續 10 秒，護甲削弱/移動減速；重複觸發重置時間不疊加；屬即時狀態，戰後或重置自動清除）。
 
 ## 7. UI 動態暫停與存檔世界狀態（WorldState）
-- **動態 ESC 暫停選單**：無地圖實體存檔點。探索模式第 3 鈕為【存檔】；戰鬥模式第 3 鈕為【戰鬥撤退】（Boss/劇情強制戰反灰鎖定）。設定僅含音量與解析度。
-- **存檔槽位**：手動 1 格（僅探索 ESC）+ 自動 1 格（Portal 切換新場景、Boss 戰勝利）。採原子寫入（先寫 Temp 檔，驗證後覆蓋正式檔）。
-- **讀取原則**：「繼續遊戲」讀取手動/自動中時間較新者（閃退重啟同理）。
+- **動態 ESC 暫停選單**：無地圖實體存檔點。按鈕順序：探索＝`繼續遊戲` → `設定` → `存檔` → `退出遊戲`；戰鬥＝`繼續遊戲` → `設定` → `戰鬥撤退`（Boss/劇情強制戰反灰鎖定）→ `退出遊戲`。設定僅含音量與畫面解析度。
+- **存檔槽位**：手動 1 格（僅 3D 探索 ESC 選單手動存檔，戰鬥中禁止存檔）+ 自動 1 格（Portal 切換新場景、Boss 戰勝利後）。採原子寫入（先寫 Temp 檔，驗證後覆蓋正式檔）。
+- **讀取原則**：「繼續遊戲」讀取手動/自動中時間較新者（閃退重啟同理）；手動與自動存檔皆無時，為全新遊戲初始狀態。
 - **SaveData**：記錄目前場景名、座標或 `SpawnPoint ID`、HP、物品欄、`WorldState`、時間戳。
 - **WorldState**：各敵人、拾取物、機關皆具唯一 `PersistentId`，載入場景時比對並銷毀已完成項目，防止刷新。
 
@@ -76,19 +76,26 @@
 | 腳本名稱 | 資料夾目錄 | 核心職責 | 通訊方式 | 開發階段 |
 |---|---|---|---|---|
 | `GameBootstrap` | `Assets/Scripts/Core/` | 檢查並加載常駐單例、初始化存檔與加載啟動場景 | Direct Call / Unity Event | Phase 1 |
-| `GameStateManager` | `Assets/Scripts/Core/` | 維護遊戲宏觀狀態（探索 / 戰鬥 / 暫停），派發狀態切換 | C# Action Event | Phase 1 |
+| `GameStateManager` | `Assets/Scripts/Core/` | 維護遊戲宏觀狀態（探索 / 戰鬥 / 暫停），派發狀態切換事件 | C# Action Event | Phase 1 |
 | `InputReader` | `Assets/Scripts/Core/` | 封裝新版 Input System，集中處理 Action Map 啟用與事件派發 | C# Action Event | Phase 1 |
 | `SceneFlowController` | `Assets/Scripts/Core/` | 非同步場景流轉、Additive 疊加/卸載 2D 戰鬥場景 | C# Action Event | Phase 1 |
 | `SaveSystem` / `SaveData` | `Assets/Scripts/Core/` | 雙槽位 JSON 序列化、原子寫入檔案、提供自動與手動存檔 API | Direct Call | Phase 1 |
 | `WorldStateRegistry` / `PersistentId` | `Assets/Scripts/Core/` | 註冊與比對場景實體存續狀態，避免離開後重複生成 | Direct Call / C# Action | Phase 1 |
+| `PlayerStats` / `InventoryManager` | `Assets/Scripts/Core/` | 管理玩家 HP、補品數量、投擲物計數（上限 3）與跨場景數據同步 | C# Action / Direct Call | Phase 1 |
 | `Portal` / `SpawnPoint` | `Assets/Scripts/Exploration/` | 3D 場景雙向門與出生點 ID 綁定，觸發傳送與自動存檔 | C# Action (`SceneFlowController`) | Phase 1 |
-| `ExplorationController` | `Assets/Scripts/Exploration/` | 3D 角色 WASD 移動、跳躍、物品互動檢視與投擲計數 (上限 3) | Listen `InputReader` | Phase 2 |
+| `ExplorationCameraRig` | `Assets/Scripts/Exploration/` | 基於 Cinemachine 3 (`Unity.Cinemachine`) 控管 3D 俯視跟隨與目標綁定 | Direct Reference / C# Action | Phase 1 |
+| `ExplorationController` (精簡版) | `Assets/Scripts/Exploration/` | 最小可行 3D WASD 移動與跳躍，供 Portal 與場景切換測試通道 | Listen `InputReader` | Phase 1 |
+| `ExplorationController` (完整版) | `Assets/Scripts/Exploration/` | 完整 3D 移動手感、跳躍調校、物品拾取互動與 LMB 瞄準投擲邏輯 | Listen `InputReader` | Phase 2 |
+| `Interactable` / `PickupItem` | `Assets/Scripts/Exploration/` | 3D 場景 F 鍵互動、物品/補品拾取判定與 WorldState 登記 | Direct Call / C# Action | Phase 2 |
+| `ThrowableProjectile` | `Assets/Scripts/Exploration/` | 投擲物拋物線飛行、碰撞判定，命中敵人時觸發先制開戰 | Direct Call / Unity Event | Phase 2 |
+| `EncounterTrigger` | `Assets/Scripts/Exploration/` | 偵測玩家/敵接觸與投擲命中，判定 3 種開戰型態並建立 `BattleContext` | Direct Call / C# Action | Phase 2 |
 | `ExplorationFreezer` | `Assets/Scripts/Exploration/` | 進戰鬥時凍結 3D 角色、敵 AI、NavMesh、鏡頭與 AudioListener | Listen `BattleTransitionManager` | Phase 2 |
 | `CombatStateMachine` | `Assets/Scripts/Combat/` | 2D 橫向戰鬥狀態機（移動/跳躍/格擋/閃避/蓄力重擊/輸入緩衝） | Listen `InputReader` | Phase 2 |
 | `CombatDamageCalculator` | `Assets/Scripts/Combat/` | 傷害計算 `Max(1, Atk - Def)`、護甲削減、破甲狀態判定 | Direct Call / C# Action | Phase 2 |
 | `BattleTransitionManager` | `Assets/Scripts/Combat/` | 控管進出戰鬥流程、建立 `PreBattleSnapshot`、結算與敗北還原 | Listen Events, Dispatch Scenes | Phase 2 |
 | `BattleContext` / `PreBattleSnapshot`| `Assets/Scripts/Combat/` | 資料載體：遇敵觸發類型、敵編隊、開戰前玩家與敵人記憶體快照 | Pure C# Data Class | Phase 2 |
 | `EnemyData` | `Assets/Scripts/Combat/` | 敵人數值 ScriptableObject（HP、攻擊力、護甲、汽水標記、紅光攻擊） | ScriptableObject Asset | Phase 2 |
+| `LootDropper` | `Assets/Scripts/Combat/` | 戰鬥勝利時計算並發放掉落物，寫入背包（不自動回血） | Direct Call / C# Action | Phase 2 |
 | `EnemyTurnScheduler` | `Assets/Scripts/Combat/` | 2D 戰場輪流發放攻擊權，協調敵群攻擊順序以避免同幀重疊出手 | C# Action / Direct Call | Phase 3 |
 | `BaseEnemyAI` / `EliteEnemyAI` | `Assets/Scripts/Combat/` | 小怪與精英怪行為邏輯（近戰揮擊、遠程投射物、格擋姿態、紅光衝刺） | Read `EnemyData`, Turn Scheduler | Phase 3 |
 | `BossController` | `Assets/Scripts/Combat/` | 汽水怪 Boss 階段轉換、特殊紅光招式調度與不可撤退鎖定 | Listen `CombatDamageCalculator` | Phase 3 |
