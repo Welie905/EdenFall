@@ -7,11 +7,24 @@
 - **代碼註解規範**：嚴禁於 `Assets/Scripts/` 及其子目錄生成零散 `README.md`。類別與關鍵方法須繁體中文 `/// <summary>`，所有 `[SerializeField]` 必加 `[Tooltip("...")]`。實作完成後於對話框條列「Inspector 掛載步驟」。
 - **常駐架構**：Bootstrap 常駐場景（放置 GameManager、InputReader、SaveSystem、WorldState 等管理器），探索/戰鬥場景不重複放置。
 
-## 2. 專案定位與雙維度架構（3D 探索 ↔ 2D 戰鬥）
-- **專案定位**：PC 2.5D 動作探索；Demo 範圍為第一區域垂直切片（邊緣區 → 外界荒野 → 汽水工廠 → 汽水怪 Boss）。
-- **3D 探索**：全 3D 俯視鏡頭與場景；地點為獨立 Scene，透過傳送門（`Portal` ↔ `SpawnPoint ID`）雙向線性切換（無單向捷徑門）。
-- **2D 戰鬥**：遇敵時 `LoadSceneMode.Additive` 疊加載入專屬 2D 橫向卷軸戰場（紙片角色、2D 敵人、2D 正交鏡頭），戰後卸載並無縫還原 3D 現場。
-- **3D 凍結機制（禁 Time.timeScale=0）**：停用 3D 玩家控制、敵人 AI、NavMeshAgent；Rigidbody 記錄原狀態後轉 `isKinematic`；停用探索鏡頭與其 `AudioListener`（全局維持單一 Listener）。`Time.timeScale = 0` 僅用於 ESC 暫停選單。
+## 2. 專案定位、雙維度架構與關卡拓撲
+- **專案定位**：PC 2.5D 動作探索；Demo 範圍為第一區域垂直切片（邊緣區 4 主線場景 → 外界荒野 → 汽水工廠 → 汽水怪 Boss；其餘支線皆排除）。
+- **3D 探索與 2D 戰鬥**：全 3D 俯視場景；遇敵時 `LoadSceneMode.Additive` 疊加載入專屬 2D 橫向卷軸戰場，戰後卸載並無縫還原 3D 現場。
+- **3D 凍結機制（禁 Time.timeScale=0）**：停用 3D 控制、敵 AI、NavMeshAgent；Rigidbody 記錄原狀態後轉 `isKinematic`；停用探索鏡頭與 AudioListener（全局單一 Listener）。`Time.timeScale = 0` 僅限 ESC 暫停選單。
+- **場景與傳送門核心規則**：各探索地點皆為獨立 Scene，透過綁定編號的 `Portal` ↔ `SpawnPoint ID` 進行雙向線性切換（無單向捷徑門）。`SC002` 為邊緣區中心樞紐（合併廢品區與古董店），配置 3 組雙向傳送門分別對接 `SC001`、`SC003`、`SC004`。
+- **第一區域 Demo 主線拓撲與戰鬥場景對照（由上而下）**：
+  1. `[SC001 主角家（起點）]`（背包內含【簽證申請表】）
+     ↕ `Portal_A`（雙向傳送門）
+  2. `[SC002 古董店（廢品區）]`（中心樞紐／投擲物撿取教學，上限 3 個）
+     ↔ `Portal_B`（雙向傳送門）↔ `[SC003 公會]`（向「葵妮」繳交申請表取得【出境簽證】後折返樞紐）
+     ↕ `Portal_C`（雙向傳送門）
+  3. `[SC004 安檢／反叛幫（出境口）]`（憑【出境簽證】放行；首次精英單挑：反叛幫組長，載入 `Battle_Edge`，不可撤退）
+     ↕ `Portal_D`（出境口雙向傳送門，踏出邊緣區，抵達後觸發自動存檔）
+  4. `[外界荒野 / 廢墟區]`（跳躍地形＋隱藏房間；小怪群最多 3 隻編隊，遇敵載入 `Battle_Wild`）
+     ↕ `Portal_E`（雙向傳送門，抵達後觸發自動存檔）
+  5. `[汽水工廠（內部）]`（汽水系敵人＋特定精英怪，遇敵載入 `Battle_Factory`，解鎖【水機制】打破水管淋濕敵人 10 秒）
+     ↕ `Portal_F`（雙向傳送門，抵達後觸發自動存檔）
+  6. `[工廠深處：汽水怪 Boss]`（Demo 最終戰，載入 `Battle_Factory`，不可撤退；勝利後自動存檔並進入 Demo 結算）
 
 ## 3. 遇敵資料傳遞（BattleContext）與戰後結算
 - **開戰型態**：1) 投擲命中敵：被命中該怪帶【先制暈眩】（同隊最多 3 隻）；2) 正面接觸：正常開戰；3) 敵人先碰到玩家：玩家帶【開場硬直】。
