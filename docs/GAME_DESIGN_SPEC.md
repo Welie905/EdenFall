@@ -4,9 +4,9 @@
 - **引擎管線**：Unity 6000.6.8f1 (Supported 鎖定版) / URP (中低規格；3D 探索與 2D 戰鬥相機各自獨立 Renderer Data)。
 - **輸入鏡頭**：Input System Package (New，禁用舊 API)；探索鏡頭使用 Cinemachine 3 (`Unity.Cinemachine`)。
 - **Unity 6 API**：`linearVelocity`、`linearDamping`、`angularDamping` (3D/2D 通用)；`FindFirstObjectByType`。
-- **架構相依**：五大目錄（`Assets/Scripts/` 下 `Core`, `Exploration`, `Combat`, `UI`, `Dialogue`）。跨系統事件放 Core (`BattleEvents`)；Exploration/Combat 僅依賴 Core（防循環引用）。嚴禁散落 `README.md`。類別/關鍵方法附中文 `/// <summary>`，`[SerializeField]` 必加 `[Tooltip]`。
+- **架構相依**：五大目錄（`Assets/Scripts/` 下 `Core`, `Exploration`, `Combat`, `UI`, `Dialogue`）。跨系統事件放 Core (`BattleEvents`)，戰鬥資料載體（`BattleContext`、`PreBattleSnapshot`、`EnemyData`）屬 Core；Exploration/Combat 僅依賴 Core（防循環引用）。嚴禁散落 `README.md`。類別/關鍵方法附中文 `/// <summary>`，`[SerializeField]` 必加 `[Tooltip]`。
 - **常駐架構**：Bootstrap 場景承載跨場景物件（3D 玩家置於此，不使用 `DontDestroyOnLoad`），載入探索場景須 `SetActiveScene`；使用 `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` 支援任意場景直啟。戰鬥場景 (`Battle_*`) 禁放 EventSystem、AudioListener、CinemachineBrain、全域 Volume。
-- **Prefab 與計時**：Root-Visuals 分離（Root 掛 Collider/剛體/邏輯；Visuals 放模型/動畫，2D 翻面僅翻 Visuals）。計時一律使用受時間縮放影響的時間（`Time.deltaTime`，禁 `unscaledDeltaTime`/`WaitForSecondsRealtime`，確保 ESC 暫停全局凍結；禁依賴 Animation Event）。
+- **Prefab 與計時**：Root-Visuals 分離（Root 掛 Collider/剛體/邏輯；Visuals 放模型/動畫，2D 翻面僅翻 Visuals）。戰鬥與探索機制計時一律使用受時間縮放影響的時間（`Time.deltaTime`，禁 `unscaledDeltaTime`/`WaitForSecondsRealtime`，確保 ESC 暫停全局凍結；禁依賴 Animation Event）；例外：暫停選單等 UI 動畫須使用 unscaled 時間，否則 `timeScale` 凍結時會卡死。
 - **Unity MCP 規範**：連線時由 Antigravity 透過 MCP 調整 Inspector/場景並條列已完成設定；無連線時條列手動步驟。操作前先 Commit，單方修改防衝突。
 
 ## 2. 關卡拓撲、傳送時序與 3D 凍結
@@ -23,7 +23,7 @@
 
 ## 3. 遇敵傳遞 (BattleContext) 與戰後結算
 - **開戰型態**：1) 投擲命中敵：被命中該怪帶【先制暈眩】（同隊最多 3 隻）；2) 正面接觸：正常開戰；3) 敵人先碰到玩家：玩家帶【開場硬直】。
-- **資料結構與快照**：開戰建立 `PreBattleSnapshot`（僅記憶體不寫檔：玩家座標/HP/物品/敵群狀態）。`BattleContext` 陣列記錄各怪（上限 3）：`EnemyData`、3D `PersistentId`、是否先制暈眩、HP 快照。Boss 戰直接生成且標記「不可撤退」。
+- **資料結構與快照**：開戰建立 `PreBattleSnapshot`（僅記憶體不寫檔：玩家座標/HP/物品/敵群狀態）。`BattleContext` 陣列記錄各怪（上限 3）：`EnemyData`、3D `PersistentId`、是否先制暈眩、HP 快照。Boss 戰與劇情強制戰（含 SC004 反叛幫組長）直接生成，並標記「不可撤退」。
 - **戰後結算**：
   | 結算型態 | 處理邏輯 |
   |---|---|
@@ -33,7 +33,7 @@
 
 ## 4. 輸入映射 (Input System) 與戰鬥狀態機
 - **Exploration Map**：`WASD` 8 向移動、`Space` 跳躍、`F` 互動/撿取、`LMB` 瞄準投擲（上限 3，投出消耗）、`ESC` 暫停。
-- **Combat Map（無耐力/下砍）**：`A/D` 移動（格擋鎖水平）｜`Space` 跳躍（可中斷格擋）｜`Shift` 閃避（最高取消權）｜`Q` 補品（結束結算，取消不耗）｜`LMB` 點按普攻（空地通用）/ 長按 $\ge 0.25$s 蓄力重擊（空地通用/被打中斷/傷害 $\times 2.0$；蓄滿破甲並暈眩非 Boss 敵）｜`RMB` 格擋（按住普擋減傷/出招 0.20s 窗口完美格擋反彈 0 傷；紅光必用 Shift）｜`ESC` 暫停。`UI Map` 供選單導航。
+- **Combat Map（無耐力/下砍）**：`A/D` 移動（格擋鎖水平）｜`Space` 跳躍（可中斷格擋）｜`Shift` 閃避（最高取消權）｜`Q` 補品（結束結算，取消不耗）｜`LMB` 點按普攻（空地通用）/ 長按 >= 0.25s 蓄力重擊（空地通用/被打中斷/傷害 = Max(1, Atk - Def) × 2.0，先扣護甲再乘倍率；蓄滿對非 Boss 敵永久破甲並暈眩（Boss 免疫暈眩與永久破甲，僅能靠【淋濕】降甲））｜`RMB` 格擋（按住普擋減傷/出招 0.20s 窗口完美格擋反彈 0 傷；紅光必用 Shift）｜`ESC` 暫停。`UI Map` 供選單導航。
 - **動作取消優先權**：`Shift` 閃避 > `Space` 跳躍 > `RMB` 格擋 > `LMB` 攻擊/蓄力 > `Q` 補品。不可取消進入 0.15s 輸入緩衝；受擊/硬直/暈眩僅緩衝。
 | 當前狀態 | Shift 閃避 | Space 跳躍 | RMB 格擋 | LMB 攻擊/蓄力 | Q 補品 |
 |---|---|---|---|---|---|
@@ -53,9 +53,9 @@
   | **普通小怪** | 45 | 12 | 2 | 近戰揮擊/紅光衝撞、遠程慢速可彈反；玩家普攻 13 傷，4 刀擊殺 |
   | **精英怪** | 120 | 18 | 10 | 帶格擋姿態（未破甲傷 5；破甲後傷 15）；配置轉身延遲供繞背 |
   | **汽水怪 Boss** | 300 | 22 | 12 | 免疫暈眩與永久破甲；僅能靠【淋濕】削弱護甲 |
-- **破甲、繞背與調度**：`傷害 = Max(1, Atk - Def)`。蓄滿破甲使非 Boss 暈眩（精英減半，Boss 免疫）。2D X 軸 `(玩家.X - 精英怪.X)` 與怪面朝相反視為繞背，以命中幀判定無視正面減傷，蓄力重擊直接破甲。`EnemyTurnScheduler` 輪流行動禁同幀重疊。
+- **破甲、繞背與調度**：`傷害 = Max(1, Atk - Def)`，`蓄力重擊傷害 = Max(1, Atk - Def) × 2.0`（先扣護甲，再乘倍率；例：Boss 未淋濕 6 傷，淋濕後 18 傷）。蓄滿對非 Boss 敵永久破甲並暈眩（精英暈眩時間為一般的一半；Boss 免疫暈眩與永久破甲，僅能靠【淋濕】降甲）。2D X 軸 `(玩家.X - 精英怪.X)` 與怪面朝相反視為繞背，以命中幀判定無視正面減傷，蓄力重擊直接破甲。`EnemyTurnScheduler` 輪流行動禁同幀重疊。
 - **閃避穿身與重疊**：無敵幀 (0.3s) 期間以 `Collider2D.excludeLayers` 穿身；結束若重疊延後恢復碰撞（上限 0.3s，超時速度微推開；Boss 允許穿身）。
-- **汽水工廠水機制**：配置可擊破閥門（冷卻 8s，場景 $\ge 2$ 個），打碎潑水。僅汽水系與 Boss 獲【淋濕】10s（護甲 -50%、移速 -25%、前搖速率 $\times 0.75$；重觸發重置時間不疊加，戰後清除）。
+- **汽水工廠水機制**：配置可擊破閥門（冷卻 8s，場景 >= 2 個），打碎潑水。僅汽水系與 Boss 獲【淋濕】10s（護甲 -50%、移速 -25%、前搖速率 × 0.75；重觸發重置時間不疊加，戰後清除）。
 - **手感參數 (`[SerializeField]`)**：完美格擋窗口 `0.20s`、閃避 CD `1.0s`、閃避無敵 `0.30s`、蓄力門檻 `0.25s`、撤退無敵 `3.0s`、輸入緩衝 `0.15s`。
 
 ## 6. UI 動態暫停與存檔世界狀態 (WorldState)
@@ -93,8 +93,8 @@
 | `CombatStateMachine` | `Assets/Scripts/Combat/` | 2D 橫向戰鬥狀態機（移動/跳躍/格擋/閃避/蓄力/輸入緩衝） | Listen `InputReader` | Phase 2 |
 | `CombatDamageCalculator` | `Assets/Scripts/Combat/` | 傷害計算 `Max(1, Atk - Def)`、護甲削減、破甲狀態判定 | Direct Call / C# Action | Phase 2 |
 | `BattleTransitionManager` | `Assets/Scripts/Combat/` | 控管進出戰鬥流程、建立 `PreBattleSnapshot`、結算與敗北還原 | Listen Events, Dispatch Scenes | Phase 2 |
-| `BattleContext` / `PreBattleSnapshot`| `Assets/Scripts/Combat/` | 資料載體：遇敵觸發類型、敵編隊陣列（上限 3）、戰前記憶體快照 | Pure C# Data Class | Phase 2 |
-| `EnemyData` | `Assets/Scripts/Combat/` | 敵人數值 ScriptableObject（HP、攻擊力、護甲、汽水標記、紅光攻擊） | ScriptableObject Asset | Phase 2 |
+| `BattleContext` / `PreBattleSnapshot`| `Assets/Scripts/Core/` | 資料載體：遇敵觸發類型、敵編隊陣列（上限 3）、戰前記憶體快照 | Pure C# Data Class | Phase 2 |
+| `EnemyData` | `Assets/Scripts/Core/` | 敵人數值 ScriptableObject（HP、攻擊力、護甲、汽水標記、紅光攻擊） | ScriptableObject Asset | Phase 2 |
 | `LootDropper` | `Assets/Scripts/Combat/` | 戰鬥勝利時計算並發放掉落物，寫入背包（不自動回血） | Direct Call / C# Action | Phase 2 |
 | `EnemyTurnScheduler` | `Assets/Scripts/Combat/` | 2D 戰場輪流發放攻擊權，協調敵群攻擊順序以避免同幀重疊出手 | C# Action / Direct Call | Phase 3 |
 | `BaseEnemyAI` / `EliteEnemyAI` | `Assets/Scripts/Combat/` | 小怪與精英怪行為邏輯（近戰揮擊、遠程投射物、格擋姿態、紅光衝刺） | Read `EnemyData`, Turn Scheduler | Phase 3 |
@@ -114,7 +114,9 @@
   | 項目 | 預設決策與數值 |
   |---|---|
   | 戰鬥中途關閉遊戲之存檔行為 | 接受回到最近一次有效存檔（記憶體快照不落盤） |
-  | 蓄力重擊傷害倍率 | 傷害計算為基礎攻擊 $\times 2.0$ |
+  | 蓄力重擊傷害倍率 | 蓄力重擊傷害 = Max(1, Atk - Def) × 2.0（先扣護甲，再乘倍率） |
   | Boss 是否允許閃避穿身 | 允許，若無敵結束重疊則延後恢復碰撞（上限 0.3s 後速度微推開） |
   | 閥門冷卻與戰場數量 | 冷卻 8 秒，每個 Boss 戰場至少配置 2 個閥門 |
   | 隱藏房裝備數量與數值 | 兩件獨立道具：攻擊 +5、護甲 +3（拾取即生效，無額外 UI） |
+  | 暈眩持續秒數 | 待負責人決定（精英暈眩時間為一般的一半） |
+  | Boss 戰時長實測 | 淋濕後每刀 9 傷（15 - 12×50% = 9），約需 34 刀；以每個淋濕窗口 6～8 刀估算，需 4～5 次淋濕窗口；未計入裝備加成，需實機測試後調整閥門數量與冷卻 |
