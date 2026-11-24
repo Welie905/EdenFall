@@ -12,6 +12,11 @@
 
 你是《Eden Fall》Unity 專案的實作代理。專案負責人是唯一操作你的人。以下規則每次都要遵守。設計內容以 `@/docs/GAME_DESIGN_SPEC.md` 為準。
 
+## 0. 工作模式（必須先確認）
+- 本專案一律使用 **Local 模式**，直接在專案資料夾 `C:/Unity Gamework/EdenFall` 工作。Unity 與 Unity MCP 操作的就是這個資料夾。
+- **不使用 Worktree 模式。** Worktree 會在另一個資料夾建立獨立副本，你改的腳本不會出現在 Unity 開啟的專案裡，且未追蹤的檔案（如 `Library/`）不會存在於副本中。
+- 開工前檢查：若 `git worktree list` 顯示目前所在資料夾不是 `C:/Unity Gamework/EdenFall`，或 `git switch main` 出現「already used by worktree」，立刻停止並回報，請負責人改用 Local 模式開新對話。
+
 ## 1. 每個任務的固定流程
 1. **開始前**：執行 `git status`。
    - 工作區乾淨：直接開始。
@@ -28,16 +33,20 @@
 - 在任務分支上工作，例如 `feature/p1-bootstrap`。不直接在 `main` 上 commit。
 
 ## 3. 允許與禁止
-- **可直接執行**：`git status`、`git diff`、`git log`、`git add`、`git commit`、`git switch`、`git switch -c`、`git stash`、`git restore <路徑>`、`git revert`。
+- **可直接執行**：`git status`、`git fetch`、`git diff`、`git log`、`git add`、`git commit`、`git switch`、`git switch -c`、`git stash`、`git restore <路徑>`、`git revert`。
 - **需負責人明確同意才可執行**：`git push`、`git pull`、`git merge`、`git rebase`。
 - **絕對不可執行**：`git reset --hard`、`git clean -fd`、`git push --force`、刪除分支、改寫已推送的歷史。
 - 不修改 `ProjectSettings/` 與 `Packages/manifest.json`，除非任務明確要求；引入套件前先說明來源、版本、授權。
 
 ## 4. 拉取最新版本（負責人要求 pull 時）
-1. 執行 `git status` 並回報。
-2. 沒有未提交修改才執行 `git pull`，僅此一步。
-3. 出現衝突或警告：立刻停止並回報，不自行解決。
-4. 完成後回報目前 commit 是否已是最新。
+1. 執行 `git status` 並回報目前分支。
+2. **更新對象是 `main`，不要在任務分支或臨時分支上 pull。** 若目前不在 `main`：
+   - 先執行 `git log origin/main..<目前分支> --oneline`。有輸出代表這個分支有 `main` 沒有的 commit，此時停止並回報，不要切換。
+   - 沒有輸出才執行 `git switch main`。
+3. 沒有未提交修改才執行 `git pull`，僅此一步。若出現 `no tracking information`，改用 `git pull origin main`。
+4. 出現衝突或警告：立刻停止並回報，不自行解決。
+5. 完成後回報 `git log -1 --oneline`，以及本機 `main` 是否等於 `origin/main`。
+6. 之後的新任務，一律從更新後的 `main` 開新分支。
 
 ## 5. 遇到下列情況立即停止並回報
 - 合併衝突，或 `.unity`、`.prefab` 檔案疑似被他人同時修改。
