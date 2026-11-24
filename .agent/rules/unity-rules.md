@@ -13,9 +13,13 @@
 你是《Eden Fall》Unity 專案的實作代理。專案負責人是唯一操作你的人。以下規則每次都要遵守。設計內容以 `@/docs/GAME_DESIGN_SPEC.md` 為準。
 
 ## 0. 工作模式（必須先確認）
-- 本專案一律使用 **Local 模式**，直接在專案資料夾 `C:/Unity Gamework/EdenFall` 工作。Unity 與 Unity MCP 操作的就是這個資料夾。
-- **不使用 Worktree 模式。** Worktree 會在另一個資料夾建立獨立副本，你改的腳本不會出現在 Unity 開啟的專案裡，且未追蹤的檔案（如 `Library/`）不會存在於副本中。
-- 開工前檢查：若 `git worktree list` 顯示目前所在資料夾不是 `C:/Unity Gamework/EdenFall`，或 `git switch main` 出現「already used by worktree」，立刻停止並回報，請負責人改用 Local 模式開新對話。
+- **Local 模式**：直接在專案資料夾 `C:/Unity Gamework/EdenFall` 工作，Unity 與 Unity MCP 操作的就是這個資料夾。
+- **Worktree 模式**：在另一個資料夾建立獨立副本與分支，不影響主資料夾。副本只有被 Git 追蹤的檔案（沒有 `Library/` 等），Unity 並未開啟它。
+- **依任務類型選擇：**
+  - 只改 C# 腳本或 `docs/` 文件：Worktree 或 Local 皆可。
+  - 需要 Unity MCP，或要建立、修改場景（`.unity`）、Prefab、ScriptableObject 資產、Inspector 設定：**必須使用 Local 模式**。
+- 開工前先判斷自己的模式（`git worktree list`，或所在資料夾是否為 `C:/Unity Gamework/EdenFall`）。若任務需要 Local 但目前在 Worktree，立刻停止並回報，請負責人改用 Local 開新對話，不要在 Worktree 裡改場景或 Prefab。
+- 在 Worktree 模式下，`git switch main` 出現「already used by worktree」屬正常現象，不要嘗試強制切換。
 
 ## 1. 每個任務的固定流程
 1. **開始前**：執行 `git status`。
@@ -43,6 +47,8 @@
 2. **更新對象是 `main`，不要在任務分支或臨時分支上 pull。** 若目前不在 `main`：
    - 先執行 `git log origin/main..<目前分支> --oneline`。有輸出代表這個分支有 `main` 沒有的 commit，此時停止並回報，不要切換。
    - 沒有輸出才執行 `git switch main`。
+   - 若處於 Worktree 模式，`main` 已被主資料夾佔用，無法切換。此時停止並回報，請負責人在主資料夾（`C:/Unity Gamework/EdenFall`）更新 `main`，或改用 Local 模式開新對話。
+   - 新任務開始前，確認本機 `main` 已是最新，因為 Worktree 分支是從本機 `main` 開出的。
 3. 沒有未提交修改才執行 `git pull`，僅此一步。若出現 `no tracking information`，改用 `git pull origin main`。
 4. 出現衝突或警告：立刻停止並回報，不自行解決。
 5. 完成後回報 `git log -1 --oneline`，以及本機 `main` 是否等於 `origin/main`。
